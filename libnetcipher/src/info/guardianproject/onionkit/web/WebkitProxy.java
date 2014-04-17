@@ -1,34 +1,28 @@
 
 package info.guardianproject.onionkit.web;
 
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-
-import info.guardianproject.onionkit.web.proxySetters.GingerBreadProxySetter;
-import info.guardianproject.onionkit.web.proxySetters.ICSProxySetter;
-import info.guardianproject.onionkit.web.proxySetters.KitKatProxySetter;
-import org.apache.http.HttpHost;
-
-import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.net.Proxy;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Parcelable;
-import android.util.ArrayMap;
 import android.util.Log;
+import info.guardianproject.onionkit.web.proxySetters.GingerBreadProxySetter;
+import info.guardianproject.onionkit.web.proxySetters.ICSProxySetter;
+import info.guardianproject.onionkit.web.proxySetters.KitKatProxySetter;
+import info.guardianproject.onionkit.web.proxySetters.ProxySetter;
+
+import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 public class WebkitProxy {
 
@@ -45,34 +39,20 @@ public class WebkitProxy {
       
     	//setSystemProperties(host, port);
 
-        boolean worked;
-
-        GingerBreadProxySetter gingerBreadSetter = new GingerBreadProxySetter(ctx, host, port);
-        ICSProxySetter icsProxySetter = new ICSProxySetter(host, port);
-        KitKatProxySetter kitKatProxySetter = new KitKatProxySetter(TAG, appClass, ctx, host, port);
-
-        if (gingerBreadSetter.canApply())
-        {
-            worked = gingerBreadSetter.setProxy();
+        for(ProxySetter proxySetter: getProxySetters(appClass, ctx, host, port)){
+            if(proxySetter.canApply()){
+                return proxySetter.setProxy();
+            }
         }
-        else if (icsProxySetter.canApply())
-        {
-            worked = icsProxySetter.setProxy();
-        }
-        else        	
-        {
-           // worked = setKitKatProxy0(ctx, host, port);
-          //  worked = setWebkitProxyICS(ctx, host, port);
+        return false;
+    }
 
-            worked = kitKatProxySetter.setProxy();
-
-         //   worked = setKitKatProxy2(ctx, host, port);
-            
-          //  sendProxyChangedIntent(ctx, host, port);
-            
-        }
-        
-        return worked;
+    private static List<ProxySetter> getProxySetters(String appClass, Context ctx, String host, int port) {
+        List<ProxySetter> proxySetters = new ArrayList<ProxySetter>();
+        proxySetters.add(new GingerBreadProxySetter(ctx, host, port));
+        proxySetters.add(new ICSProxySetter(host, port));
+        proxySetters.add(new KitKatProxySetter(TAG, appClass, ctx, host, port));
+        return proxySetters;
     }
 
     private static void setSystemProperties(String host, int port)
@@ -108,84 +88,6 @@ public class WebkitProxy {
         System.getProperty("networkaddress.cache.ttl", "-1");
         */
 
-    }
-
-    /**
-     * Override WebKit Proxy settings
-     * 
-     * @param ctx Android ApplicationContext
-     * @param host
-     * @param port
-     * @return true if Proxy was successfully set
-     */
-    private static boolean setWebkitProxyGingerbread(Context ctx, String host, int port)
-            throws Exception
-            {
-    	
-        boolean ret = false;
-
-        Object requestQueueObject = getRequestQueue(ctx);
-        if (requestQueueObject != null) {
-            // Create Proxy config object and set it into request Q
-            HttpHost httpHost = new HttpHost(host, port, "http");
-            setDeclaredField(requestQueueObject, "mProxyHost", httpHost);
-            return true;
-        }
-        return false;
-
-    }
-
-    private static boolean setWebkitProxyICS(Context ctx, String host, int port)
-    {
-
-        // PSIPHON: added support for Android 4.x WebView proxy
-        try
-        {
-            Class webViewCoreClass = Class.forName("android.webkit.WebViewCore");
-
-            Class proxyPropertiesClass = Class.forName("android.net.ProxyProperties");
-            if (webViewCoreClass != null && proxyPropertiesClass != null)
-            {
-                Method m = webViewCoreClass.getDeclaredMethod("sendStaticMessage", Integer.TYPE,
-                        Object.class);
-                Constructor c = proxyPropertiesClass.getConstructor(String.class, Integer.TYPE,
-                        String.class);
-
-                if (m != null && c != null)
-                {
-                    m.setAccessible(true);
-                    c.setAccessible(true);
-                    Object properties = c.newInstance(host, port, null);
-
-                    // android.webkit.WebViewCore.EventHub.PROXY_CHANGED = 193;
-                    m.invoke(null, 193, properties);
-
-
-                    return true;
-                }
-
-
-           }
-        } catch (Exception e)
-        {
-            Log.e("ProxySettings",
-                    "Exception setting WebKit proxy through android.net.ProxyProperties: "
-                            + e.toString());
-        } catch (Error e)
-        {
-            Log.e("ProxySettings",
-                    "Exception setting WebKit proxy through android.webkit.Network: "
-                            + e.toString());
-        }
-
-        return false;
-
-    }
-
-    @TargetApi(19)
-	public static boolean resetKitKatProxy(String appClass, Context appContext) {
-    
-    	return setKitKatProxy(appClass, appContext,null,0);
     }
     
 
@@ -409,61 +311,14 @@ public class WebkitProxy {
         System.clearProperty("http.proxyPort");
         System.clearProperty("https.proxyHost");
         System.clearProperty("https.proxyPort");
-        
-        
-         if (Build.VERSION.SDK_INT < 14)
-        {
-            resetProxyForGingerBread(ctx);
-        }
-        else  if (Build.VERSION.SDK_INT < 19)
-        {
-            resetProxyForICS();
-        }
-        else
-        {
-        	resetKitKatProxy(appClass, ctx);
+
+
+        for(ProxySetter proxySetter: getProxySetters(appClass, ctx, null, 0)){
+            if(proxySetter.canApply()){
+                proxySetter.resetProxy();
+            }
         }
          
-    }
-
-    private static void resetProxyForICS() throws Exception{
-        try
-        {
-            Class webViewCoreClass = Class.forName("android.webkit.WebViewCore");
-            Class proxyPropertiesClass = Class.forName("android.net.ProxyProperties");
-            if (webViewCoreClass != null && proxyPropertiesClass != null)
-            {
-                Method m = webViewCoreClass.getDeclaredMethod("sendStaticMessage", Integer.TYPE,
-                        Object.class);
-
-                if (m != null)
-                {
-                    m.setAccessible(true);
-
-                    // android.webkit.WebViewCore.EventHub.PROXY_CHANGED = 193;
-                    m.invoke(null, 193, null);
-                }
-            }
-        } catch (Exception e)
-        {
-            Log.e("ProxySettings",
-                    "Exception setting WebKit proxy through android.net.ProxyProperties: "
-                            + e.toString());
-            throw e;
-        } catch (Error e)
-        {
-            Log.e("ProxySettings",
-                    "Exception setting WebKit proxy through android.webkit.Network: "
-                            + e.toString());
-            throw e;
-        }
-    }
-
-    private static void resetProxyForGingerBread(Context ctx) throws Exception {
-        Object requestQueueObject = getRequestQueue(ctx);
-        if (requestQueueObject != null) {
-            setDeclaredField(requestQueueObject, "mProxyHost", null);
-        }
     }
 
     public static Object getRequestQueue(Context ctx) throws Exception {

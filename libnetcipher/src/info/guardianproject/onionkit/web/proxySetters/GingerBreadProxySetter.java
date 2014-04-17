@@ -7,7 +7,7 @@ import org.apache.http.HttpHost;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-public class GingerBreadProxySetter {
+public class GingerBreadProxySetter implements ProxySetter {
 
     private final Context ctx;
     private final String host;
@@ -31,6 +31,14 @@ public class GingerBreadProxySetter {
         }
         return false;
 
+    }
+
+    public boolean resetProxy() throws Exception {
+        Object requestQueueObject = getRequestQueue(ctx);
+        if (requestQueueObject != null) {
+            setDeclaredField(requestQueueObject, "mProxyHost", null);
+        }
+        return true;
     }
 
     public boolean canApply(){

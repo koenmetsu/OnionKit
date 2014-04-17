@@ -16,7 +16,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 @TargetApi(19)
-public class KitKatProxySetter {
+public class KitKatProxySetter implements ProxySetter {
 
     private final String TAG;
     private final String appClass;
@@ -32,11 +32,23 @@ public class KitKatProxySetter {
         this.port = port;
     }
 
+    @Override
     public boolean canApply(){
         return true;
     }
 
+    @Override
     public boolean setProxy() {
+        return setProxy(appClass, appContext, host, port);
+    }
+
+    @Override
+    @TargetApi(19)
+    public boolean resetProxy() {
+        return setProxy(appClass, appContext, null, 0);
+    }
+
+    private boolean setProxy(String appClass, Context appContext, Object o, int i) {
         //Context appContext = webView.getContext().getApplicationContext();
 
         if (host != null)
@@ -123,7 +135,8 @@ public class KitKatProxySetter {
             Log.v(TAG, e.getMessage());
             Log.v(TAG, exceptionAsString);
         }
-        return false;    }
+        return false;
+    }
 
 
 }
