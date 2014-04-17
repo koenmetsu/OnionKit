@@ -11,6 +11,9 @@ import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 
+import info.guardianproject.onionkit.web.proxySetters.GingerBreadProxySetter;
+import info.guardianproject.onionkit.web.proxySetters.ICSProxySetter;
+import info.guardianproject.onionkit.web.proxySetters.KitKatProxySetter;
 import org.apache.http.HttpHost;
 
 import android.annotation.TargetApi;
@@ -42,23 +45,27 @@ public class WebkitProxy {
       
     	//setSystemProperties(host, port);
 
-        boolean worked = false;
+        boolean worked;
 
-        if (Build.VERSION.SDK_INT < 14)
+        GingerBreadProxySetter gingerBreadSetter = new GingerBreadProxySetter(ctx, host, port);
+        ICSProxySetter icsProxySetter = new ICSProxySetter(host, port);
+        KitKatProxySetter kitKatProxySetter = new KitKatProxySetter(TAG, appClass, ctx, host, port);
+
+        if (gingerBreadSetter.canApply())
         {
-            worked = setWebkitProxyGingerbread(ctx, host, port);
+            worked = gingerBreadSetter.setProxy();
         }
-        else if (Build.VERSION.SDK_INT < 19)
+        else if (icsProxySetter.canApply())
         {
-            worked = setWebkitProxyICS(ctx, host, port);
+            worked = icsProxySetter.setProxy();
         }
         else        	
         {
            // worked = setKitKatProxy0(ctx, host, port);
           //  worked = setWebkitProxyICS(ctx, host, port);
 
-            worked = setKitKatProxy(appClass, ctx, host, port);
-            
+            worked = kitKatProxySetter.setProxy();
+
          //   worked = setKitKatProxy2(ctx, host, port);
             
           //  sendProxyChangedIntent(ctx, host, port);
@@ -152,12 +159,12 @@ public class WebkitProxy {
 
                     // android.webkit.WebViewCore.EventHub.PROXY_CHANGED = 193;
                     m.invoke(null, 193, properties);
-                    
-                 
+
+
                     return true;
                 }
 
-                
+
            }
         } catch (Exception e)
         {
@@ -174,103 +181,14 @@ public class WebkitProxy {
         return false;
 
     }
-    
+
     @TargetApi(19)
 	public static boolean resetKitKatProxy(String appClass, Context appContext) {
     
     	return setKitKatProxy(appClass, appContext,null,0);
     }
     
-    @TargetApi(19)
-	public static boolean setKitKatProxy(String appClass, Context appContext, String host, int port) {
-    	//Context appContext = webView.getContext().getApplicationContext();
-    	
-    	if (host != null)
-    	{
-	        System.setProperty("http.proxyHost", host);
-	        System.setProperty("http.proxyPort", port + "");
-	        System.setProperty("https.proxyHost", host);
-	        System.setProperty("https.proxyPort", port + "");
-    	}
-        
-        try {
-            Class applictionCls = Class.forName(appClass);
-            Field loadedApkField = applictionCls.getField("mLoadedApk");
-            loadedApkField.setAccessible(true);
-            Object loadedApk = loadedApkField.get(appContext);
-            Class loadedApkCls = Class.forName("android.app.LoadedApk");
-            Field receiversField = loadedApkCls.getDeclaredField("mReceivers");
-            receiversField.setAccessible(true);
-            ArrayMap receivers = (ArrayMap) receiversField.get(loadedApk);
-            for (Object receiverMap : receivers.values()) {
-                for (Object rec : ((ArrayMap) receiverMap).keySet()) {
-                    Class clazz = rec.getClass();
-                    if (clazz.getName().contains("ProxyChangeListener")) {
-                        Method onReceiveMethod = clazz.getDeclaredMethod("onReceive", Context.class, Intent.class);
-                        Intent intent = new Intent(Proxy.PROXY_CHANGE_ACTION);
-                        
-                        if (host != null)
-                        {
-	                        /*********** optional, may be need in future *************/
-	                        final String CLASS_NAME = "android.net.ProxyProperties";
-	                        Class cls = Class.forName(CLASS_NAME);
-	                        Constructor constructor = cls.getConstructor(String.class, Integer.TYPE, String.class);
-	                        constructor.setAccessible(true);
-	                        Object proxyProperties = constructor.newInstance(host, port, null);
-	                        intent.putExtra("proxy", (Parcelable) proxyProperties);
-	                        /*********** optional, may be need in future *************/
-                        }
 
-                        onReceiveMethod.invoke(rec, appContext, intent);
-                    }
-                }
-            }
-            return true;
-        } catch (ClassNotFoundException e) {
-            StringWriter sw = new StringWriter();
-            e.printStackTrace(new PrintWriter(sw));
-            String exceptionAsString = sw.toString();
-            Log.v(TAG, e.getMessage());
-            Log.v(TAG, exceptionAsString);
-        } catch (NoSuchFieldException e) {
-            StringWriter sw = new StringWriter();
-            e.printStackTrace(new PrintWriter(sw));
-            String exceptionAsString = sw.toString();
-            Log.v(TAG, e.getMessage());
-            Log.v(TAG, exceptionAsString);
-        } catch (IllegalAccessException e) {
-            StringWriter sw = new StringWriter();
-            e.printStackTrace(new PrintWriter(sw));
-            String exceptionAsString = sw.toString();
-            Log.v(TAG, e.getMessage());
-            Log.v(TAG, exceptionAsString);
-        } catch (IllegalArgumentException e) {
-            StringWriter sw = new StringWriter();
-            e.printStackTrace(new PrintWriter(sw));
-            String exceptionAsString = sw.toString();
-            Log.v(TAG, e.getMessage());
-            Log.v(TAG, exceptionAsString);
-        } catch (NoSuchMethodException e) {
-            StringWriter sw = new StringWriter();
-            e.printStackTrace(new PrintWriter(sw));
-            String exceptionAsString = sw.toString();
-            Log.v(TAG, e.getMessage());
-            Log.v(TAG, exceptionAsString);
-        } catch (InvocationTargetException e) {
-            StringWriter sw = new StringWriter();
-            e.printStackTrace(new PrintWriter(sw));
-            String exceptionAsString = sw.toString();
-            Log.v(TAG, e.getMessage());
-            Log.v(TAG, exceptionAsString);
-        } catch (InstantiationException e) {
-            StringWriter sw = new StringWriter();
-            e.printStackTrace(new PrintWriter(sw));
-            String exceptionAsString = sw.toString();
-            Log.v(TAG, e.getMessage());
-            Log.v(TAG, exceptionAsString);
-        }
-        return false;    }
-    
     private static boolean sendProxyChangedIntent(Context ctx, String host, int port) 
     {
 
