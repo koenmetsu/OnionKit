@@ -316,6 +316,7 @@ public class WebkitProxy {
         for(ProxySetter proxySetter: getProxySetters(appClass, ctx, null, 0)){
             if(proxySetter.canApply()){
                 proxySetter.resetProxy();
+                break;
             }
         }
          
